@@ -1,0 +1,302 @@
+// ==UserScript==
+// @name         TradingView Complete Ad Remover v5
+// @namespace    http://tampermonkey.net/
+// @version      5.0
+// @description  Remove ALL ads from TradingView - Enhanced
+// @author       You
+// @match        https://*.tradingview.com/*
+// @grant        GM_addStyle
+// @run-at       document-start
+// ==/UserScript==
+
+(function() {
+    'use strict';
+
+    console.log('🚀 TradingView Ad Remover v5: STARTING');
+
+    // CRITICAL: CSS-based hiding (works immediately, before DOM loads)
+    const cssRules = `
+        /* Toast notifications */
+        #tv-toasts,
+        .tv-toast,
+        [class*="toast-"],
+        [class*="Toast"] { display: none !important; }
+
+        /* Promotional popups and dialogs */
+        [class*="dialog-"][class*="promotional"],
+        [class*="popup-"],
+        [class*="Popup-"],
+        [data-dialog-name*="promo"],
+        [data-dialog-name*="ad"],
+        [data-dialog-name="gopro"],
+        [data-dialog-name="trial"],
+        .tv-dialog__modal-container:has([class*="promo"]),
+        .tv-dialog:has([class*="sale"]),
+        .js-dialog[class*="promotion"] { display: none !important; }
+
+        /* Banner ads */
+        [class*="banner"][class*="ad"],
+        [class*="Ad-"],
+        [class*="-ad-"],
+        [class*="advert"],
+        [class*="Advert"],
+        [id*="banner-ad"],
+        .tv-feed-widget__banner,
+        [class*="feed-"][class*="banner"],
+        [class*="widgetbar-"][class*="ad"],
+        [class*="bottom-"][class*="banner"],
+        [class*="sticky-"][class*="ad"] { display: none !important; }
+
+        /* Sidebar ads */
+        [class*="widgetbar-widget"][class*="ad"],
+        [class*="sidebar"][class*="ad"],
+        .tv-feed-widget__ad { display: none !important; }
+
+        /* Black Friday / Sale specific */
+        [class*="black-friday"],
+        [class*="BlackFriday"],
+        [class*="cyber-monday"],
+        [class*="sale-banner"],
+        [class*="promo-banner"],
+        [class*="holiday-"] { display: none !important; }
+
+        /* Fixed position ad overlays */
+        div[class*="overlay-"][style*="z-index"]:not([class*="chart"]):not([class*="menu"]) { display: none !important; }
+
+        /* Ad iframes */
+        iframe[src*="doubleclick"],
+        iframe[src*="googlesyndication"],
+        iframe[src*="googleads"],
+        iframe[src*="pagead"],
+        iframe[id*="google_ads"] { display: none !important; }
+
+        /* Capital.com and broker ads */
+        [class*="broker-"],
+        a[href*="capital.com"],
+        div:has(> a[href*="capital.com"]) { display: none !important; }
+
+        /* Generic ad containers */
+        [class*="ad-slot"],
+        [class*="adSlot"],
+        [class*="ad-container"],
+        [class*="adContainer"],
+        [data-ad-slot],
+        [data-ad],
+        .ad, .ads { display: none !important; }
+
+        /* Ensure body scrolling works */
+        body.i-no-scroll:has([class*="promo"]),
+        html.i-no-scroll:has([class*="promo"]) {
+            overflow: auto !important;
+        }
+    `;
+
+    // Inject CSS immediately
+    const style = document.createElement('style');
+    style.textContent = cssRules;
+    (document.head || document.documentElement).appendChild(style);
+
+    // Wait for DOM to be ready for JS-based removal
+    function onReady(fn) {
+        if (document.readyState !== 'loading') {
+            fn();
+        } else {
+            document.addEventListener('DOMContentLoaded', fn);
+        }
+    }
+
+    onReady(function() {
+        console.log('🔧 DOM Ready - Starting JS cleanup');
+
+        // Aggressive ad selectors
+        const adSelectors = [
+            '#tv-toasts',
+            '[class*="toast"]',
+            '[role="dialog"]',
+            '[class*="dialog"]',
+            '[class*="modal"]',
+            '[class*="popup"]',
+            '[class*="banner"]',
+            '[class*="promo"]',
+            '[class*="ad-"]',
+            '[class*="-ad"]',
+            'iframe',
+            '[class*="overlay"]',
+            'article'
+        ];
+
+        // Keywords that indicate ads
+        const adKeywords = [
+            'black friday', 'sale', 'discount', 'offer', 'upgrade',
+            'premium', 'get more', 'capital.com', 'trade gold',
+            'cfd', 'go pro', 'gopro', 'trial', 'subscribe',
+            '% off', 'promo', 'limited time', 'don\'t miss',
+            'broker', 'open account', 'start trading', 'free trial'
+        ];
+
+        function isAdElement(el) {
+            if (!el) return false;
+
+            const text = (el.textContent || '').toLowerCase();
+            const className = (el.className || '').toString().toLowerCase();
+            const id = (el.id || '').toLowerCase();
+
+            // Check for ad keywords in text
+            for (const keyword of adKeywords) {
+                if (text.includes(keyword)) {
+                    // Make sure it's not a small part of larger content
+                    if (text.length < 2000) return true;
+                }
+            }
+
+            // Check class/id for ad indicators
+            const adPatterns = ['ad', 'promo', 'banner', 'popup', 'modal', 'toast', 'overlay'];
+            for (const pattern of adPatterns) {
+                if (className.includes(pattern) || id.includes(pattern)) {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        function removeElement(el, reason) {
+            if (el && el.parentNode) {
+                el.remove();
+                console.log(`✓ Removed: ${reason}`);
+                return true;
+            }
+            return false;
+        }
+
+        function cleanupAds() {
+            let removed = 0;
+
+            // Remove toasts
+            document.querySelectorAll('#tv-toasts, [class*="toast"]').forEach(el => {
+                if (removeElement(el, 'toast')) removed++;
+            });
+
+            // Remove dialogs/modals that look like ads
+            document.querySelectorAll('[role="dialog"], [class*="dialog"], [class*="modal"]').forEach(el => {
+                if (isAdElement(el)) {
+                    if (removeElement(el, 'dialog/modal ad')) removed++;
+                }
+            });
+
+            // Remove promotional popups
+            document.querySelectorAll('[class*="popup"], [class*="promo"]').forEach(el => {
+                if (removeElement(el, 'popup/promo')) removed++;
+            });
+
+            // Remove fixed position banners
+            document.querySelectorAll('div').forEach(el => {
+                const style = window.getComputedStyle(el);
+                if ((style.position === 'fixed' || style.position === 'sticky') && isAdElement(el)) {
+                    if (removeElement(el, 'fixed banner')) removed++;
+                }
+            });
+
+            // Remove ad iframes
+            document.querySelectorAll('iframe').forEach(iframe => {
+                const src = (iframe.src || '').toLowerCase();
+                if (src.includes('doubleclick') || src.includes('googlesyndication') ||
+                    src.includes('ads') || src.includes('pagead') || src.includes('capital.com')) {
+                    if (removeElement(iframe, 'ad iframe')) removed++;
+                }
+            });
+
+            // Remove elements with ad-related data attributes
+            document.querySelectorAll('[data-ad], [data-ad-slot], [data-advertisement]').forEach(el => {
+                if (removeElement(el, 'data-ad element')) removed++;
+            });
+
+            // Unlock page scroll
+            document.body.classList.remove('i-no-scroll');
+            document.documentElement.classList.remove('i-no-scroll');
+            document.body.style.overflow = '';
+            document.documentElement.style.overflow = '';
+
+            // Remove backdrop/overlay elements that block interaction
+            document.querySelectorAll('[class*="backdrop"], [class*="overlay"]').forEach(el => {
+                const style = window.getComputedStyle(el);
+                if (style.position === 'fixed' && style.zIndex > 100) {
+                    // Check if it's not a legitimate UI element
+                    if (!el.closest('[class*="chart"]') && !el.closest('[class*="menu"]')) {
+                        if (removeElement(el, 'blocking overlay')) removed++;
+                    }
+                }
+            });
+
+            return removed;
+        }
+
+        // Initial cleanup
+        cleanupAds();
+
+        // Set up MutationObserver for dynamic content
+        const observer = new MutationObserver((mutations) => {
+            let shouldClean = false;
+            for (const mutation of mutations) {
+                if (mutation.addedNodes.length > 0) {
+                    shouldClean = true;
+                    break;
+                }
+            }
+            if (shouldClean) {
+                // Debounce cleanup
+                clearTimeout(window._adCleanupTimeout);
+                window._adCleanupTimeout = setTimeout(cleanupAds, 100);
+            }
+        });
+
+        observer.observe(document.body, {
+            childList: true,
+            subtree: true
+        });
+
+        // Periodic cleanup as fallback
+        setInterval(cleanupAds, 5000);
+
+        // Intercept network requests to ad servers
+        const originalXHR = window.XMLHttpRequest;
+        window.XMLHttpRequest = function() {
+            const xhr = new originalXHR();
+            const originalOpen = xhr.open;
+            xhr.open = function(method, url) {
+                if (typeof url === 'string' && (
+                    url.includes('doubleclick') ||
+                    url.includes('googlesyndication') ||
+                    url.includes('googletagmanager') ||
+                    url.includes('google-analytics') ||
+                    url.includes('googleads')
+                )) {
+                    console.log('🚫 Blocked XHR:', url);
+                    return;
+                }
+                return originalOpen.apply(this, arguments);
+            };
+            return xhr;
+        };
+
+        // Intercept fetch
+        const originalFetch = window.fetch;
+        window.fetch = function(resource, options) {
+            const url = typeof resource === 'string' ? resource : resource?.url;
+            if (url && (
+                url.includes('doubleclick') ||
+                url.includes('googlesyndication') ||
+                url.includes('googletagmanager') ||
+                url.includes('google-analytics') ||
+                url.includes('googleads') ||
+                url.includes('securepubads')
+            )) {
+                console.log('🚫 Blocked fetch:', url);
+                return Promise.resolve(new Response('{}', { status: 200 }));
+            }
+            return originalFetch.apply(this, arguments);
+        };
+
+        console.log('✅ TradingView Ad Remover v5 fully initialized');
+    });
+})();
